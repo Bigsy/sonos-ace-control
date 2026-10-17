@@ -3,7 +3,13 @@
 An independent macOS controller for Sonos headphones over Bluetooth LE, tested
 with Sonos Ace Ultra. Requires macOS 13 or later.
 
-<img width="576" height="648" alt="Ace Control app window" src="https://github.com/user-attachments/assets/ee3c6a3e-576d-40ab-af83-055f6e7eb8bd" />
+## Screenshots
+
+| | |
+| :---: | :---: |
+| **Sound**<br><img width="300" alt="Sound settings" src="https://github.com/user-attachments/assets/ee3c6a3e-576d-40ab-af83-055f6e7eb8bd" /> | **Audio options**<br><img width="300" alt="Audio options settings" src="screenshots/audio-options.png" /> |
+| **Controls**<br><img width="300" alt="Controls settings" src="screenshots/controls.png" /> | **Power**<br><img width="300" alt="Power settings" src="screenshots/power.png" /> |
+| **Voice**<br><img width="300" alt="Voice settings" src="screenshots/voice.png" /> | **Shortcuts**<br><img width="300" alt="Shortcuts settings" src="screenshots/shortcuts.png" /> |
 
 ## Features
 
