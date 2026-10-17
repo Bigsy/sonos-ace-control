@@ -65,17 +65,6 @@ certificate; without one, ad-hoc signing may cause repeated Bluetooth permission
 prompts. Maintainers can use `sh tools/package_release.sh` to create a signed
 universal ZIP, and set `ACE_NOTARY_PROFILE` to notarize it.
 
-## Limitations
-
-This is an unofficial interoperability project. Settings depend on headphone
-firmware. USB audio can coexist with Bluetooth control, but sidetone over USB
-has not been achieved. Firmware updates, account setup, TV Audio Swap, and
-TrueCinema calibration are outside this project's scope.
-
-Device authentication checks message integrity and the device challenge, but
-does not yet validate the manufacturer's certificate chain. App logs are at
-`~/Library/Logs/Ace Control.log`.
-
 ## Licence
 
 MIT. See [LICENSE](LICENSE).
