@@ -1,0 +1,5 @@
+# Local inspection material and device captures must stay local.
+private/
+.build/
+.DS_Store
+__pycache__/
