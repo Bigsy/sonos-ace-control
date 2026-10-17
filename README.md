@@ -1,39 +1,43 @@
 # Sonos Ace Control
 
-An independent native macOS controller for Sonos headphones over Bluetooth LE,
-tested with Sonos Ace Ultra. Built with Swift, AppKit and CoreBluetooth.
+An independent macOS controller for Sonos headphones over Bluetooth LE, tested
+with Sonos Ace Ultra. Requires macOS 13 or later.
 
-<img width="576" height="648" alt="image" src="https://github.com/user-attachments/assets/ee3c6a3e-576d-40ab-af83-055f6e7eb8bd" />
+<img width="576" height="648" alt="Ace Control app window" src="https://github.com/user-attachments/assets/ee3c6a3e-576d-40ab-af83-055f6e7eb8bd" />
 
 ## Features
 
-- Menu bar headphone icon with battery level.
-- Tick Shortcut beside a switch or Noise control to add it to the Shortcuts tab;
-  record a key combination for each selected control. Choose which noise modes
-  its shortcut cycles through, such as Noise cancelling and Aware only.
-- Optional auto-connect to the last successfully connected headphones.
-- Noise control, sidetone, loudness, and basic/advanced equalizer controls.
-- Additional audio, wear detection, button, power, voice and device settings.
-- Settings changes verified by reading their values back from the headphones.
-- A main window that can be closed while the menu bar controls keep running.
+- Menu bar controls and headphone battery level.
+- Noise control, sidetone, equalizer, and other audio, power, voice, and device settings.
+- Optional auto-connect to the last connected headphones.
+- Global keyboard shortcuts for selected controls, with a choice of which noise
+  modes the shortcut cycles through.
+- Settings changes verified by reading them back from the headphones.
 
-## Download and install
+## Install
 
-Download the macOS ZIP from [Releases](https://github.com/Bigsy/sonos-ace-control/releases),
-unzip it, and move **Ace Control.app** to Applications. The release build supports
-Apple silicon and Intel Macs running macOS 13 or later. Open the app and allow
-Bluetooth access when macOS asks.
+Download the ZIP from [Releases](https://github.com/Bigsy/sonos-ace-control/releases),
+unzip it, and move **Ace Control.app** to Applications. The release supports Apple
+silicon and Intel Macs. Allow Bluetooth access when macOS asks.
 
-Release ZIPs are Developer ID-signed but have not been notarized by Apple.
-macOS may block its first launch. If you trust this project's download and
-choose to open it, try opening the app, then use **System Settings → Privacy &
-Security → Open Anyway** as described in [Apple's instructions](https://support.apple.com/en-gb/102445).
+Releases are Developer ID-signed but not notarized. If macOS blocks the first
+launch, try opening the app, then use **System Settings → Privacy & Security →
+Open Anyway** as described by [Apple](https://support.apple.com/en-gb/102445).
+
+## Use
+
+Select your headphones and connect. You can then enable **Auto-connect to last
+headphones** in the window or menu bar. If connection fails, close the Sonos
+phone app and try again.
+
+The menu bar icon provides quick access to settings. Tick **Shortcut** beside a
+control to add it to the Shortcuts tab, where you can record a key combination
+and choose which noise modes to cycle through. Shortcuts work while the app is
+running, even when its window is closed.
 
 ## Build from source
 
-Requires macOS 13 or later and the Swift compiler/macOS SDK supplied by Xcode or
-its Command Line Tools (`xcode-select --install`). No third-party build
-dependencies are required.
+Install Xcode or its Command Line Tools (`xcode-select --install`), then run:
 
 ```sh
 git clone https://github.com/Bigsy/sonos-ace-control.git
@@ -42,48 +46,21 @@ sh build.sh
 open '.build/Ace Control.app'
 ```
 
-The build targets the current Mac's architecture and macOS 13 or later, runs
-protocol parsing checks, and signs the app. Set `ACE_ARCHS=universal` to build
-both Apple silicon and Intel slices. It uses an available Apple Development
-identity so privacy approvals can persist across rebuilds. Set
-`ACE_SIGNING_IDENTITY` to choose another identity. Without one, the build falls
-back to ad-hoc signing and macOS may ask for permission after updates.
+No third-party dependencies are required. For a universal build, use
+`ACE_ARCHS=universal sh build.sh`. The script uses an available Apple Development
+certificate; without one, ad-hoc signing may cause repeated Bluetooth permission
+prompts. Maintainers can use `sh tools/package_release.sh` to create a signed
+universal ZIP, and set `ACE_NOTARY_PROFILE` to notarize it.
 
-Maintainers with a Developer ID Application certificate can run
-`sh tools/package_release.sh` to create a signed universal ZIP in
-`.build/release/`. Set `ACE_NOTARY_PROFILE` to a saved `notarytool` Keychain
-profile to notarize and staple the app before packaging.
+## Limitations
 
-Allow Bluetooth access, select the headphones, and connect. Tick **Auto-connect
-to last headphones** in the window or menu bar to reconnect to that device on
-future launches and after an unexpected disconnection. Connect manually once
-before using auto-connect; a manual **Disconnect** turns it off. Close the
-Sonos phone app if it is holding the control connection. No Android phone, ADB
-connection or captured authentication token is needed to use the controller.
+This is an unofficial interoperability project. Settings depend on headphone
+firmware. USB audio can coexist with Bluetooth control, but sidetone over USB
+has not been achieved. Firmware updates, account setup, TV Audio Swap, and
+TrueCinema calibration are outside this project's scope.
 
-Click the menu bar icon to access settings. Battery is refreshed every minute.
-Choose **Quit Ace Control** to end the app; closing its window leaves it running.
-Recorded shortcuts work anywhere on the Mac while Ace Control is running. They
-require Command, Option or Control, or a function key, to avoid intercepting ordinary typing. The
-Shortcuts tab can limit them to Ace Control instead; selections and key
-combinations are saved between launches. In the Shortcuts tab, choose the noise
-modes that its shortcut cycles through; all three are selected by default. A
-shortcut does nothing until the headphones are connected and their current
-setting has been read.
-
-## Current limitations
-
-This is an interoperability prototype, not an official Sonos application.
-Setting availability depends on the headphones and firmware. USB audio can
-coexist with BLE control, but enabling sidetone over USB has not been achieved.
-Firmware updates, account setup, TV Audio Swap setup and TrueCinema calibration
-remain outside this project's scope.
-
-Device authentication verifies certificate/message integrity and the device's
-challenge signature, but does not yet validate the manufacturer's certificate
-chain. Authentication tokens are kept in memory and are not logged or persisted.
-
-The `tools/` directory contains inspection utilities. App logs are stored at
+Device authentication checks message integrity and the device challenge, but
+does not yet validate the manufacturer's certificate chain. App logs are at
 `~/Library/Logs/Ace Control.log`.
 
 ## Licence
