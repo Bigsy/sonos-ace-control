@@ -3,9 +3,11 @@
 An independent native macOS controller for Sonos headphones over Bluetooth LE,
 tested with Sonos Ace Ultra. Built with Swift, AppKit and CoreBluetooth.
 
+<img width="576" height="648" alt="image" src="https://github.com/user-attachments/assets/ee3c6a3e-576d-40ab-af83-055f6e7eb8bd" />
+
 ## Features
 
-- Menu bar headphone icon with battery level; `F` means fully charged.
+- Menu bar headphone icon with battery level.
 - Tick Shortcut beside a switch or Noise control to add it to the Shortcuts tab;
   record a key combination for each selected control. Choose which noise modes
   its shortcut cycles through, such as Noise cancelling and Aware only.
