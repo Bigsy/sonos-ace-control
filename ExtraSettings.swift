@@ -121,7 +121,32 @@ final class ExtraSettings: NSObject {
             note.textColor = .secondaryLabelColor
             views.append(note)
             if name == "Device" { views.append(deviceStatus) }
-            for setting in AceSetting.all where setting.tab == name { views.append(makeRow(setting)) }
+            if name == "Audio options" {
+                let settings = AceSetting.all.filter { $0.tab == name }
+                let toggles = settings.filter { if case .toggle = $0.kind { return true }; return false }
+                let midpoint = (toggles.count + 1) / 2
+                let columns = [Array(toggles[..<midpoint]), Array(toggles[midpoint...])].map { group in
+                    let rows = group.map { makeRow($0, compact: true) }
+                    let column = NSStackView(views: rows)
+                    column.orientation = .vertical
+                    column.alignment = .leading
+                    column.spacing = 12
+                    for row in rows { row.widthAnchor.constraint(equalTo: column.widthAnchor).isActive = true }
+                    return column
+                }
+                let grid = NSStackView(views: columns)
+                grid.orientation = .horizontal
+                grid.alignment = .top
+                grid.distribution = .fillEqually
+                grid.spacing = 16
+                views.append(grid)
+                for setting in settings {
+                    if case .toggle = setting.kind { continue }
+                    views.append(makeRow(setting))
+                }
+            } else {
+                for setting in AceSetting.all where setting.tab == name { views.append(makeRow(setting)) }
+            }
             let tab = NSTabViewItem(identifier: name)
             tab.label = name
             tab.view = Self.scroll(views)
@@ -183,6 +208,7 @@ final class ExtraSettings: NSObject {
     static func scroll(_ views: [NSView]) -> NSScrollView {
         let scroll = NSScrollView()
         scroll.hasVerticalScroller = true
+        scroll.autohidesScrollers = true
         scroll.drawsBackground = false
         let content = SettingsDocumentView()
         content.translatesAutoresizingMaskIntoConstraints = false
@@ -202,12 +228,13 @@ final class ExtraSettings: NSObject {
         return scroll
     }
 
-    private func makeRow(_ setting: AceSetting) -> NSView {
+    private func makeRow(_ setting: AceSetting, compact: Bool = false) -> NSView {
         let label = NSTextField(labelWithString: setting.title)
-        label.widthAnchor.constraint(equalToConstant: 235).isActive = true
+        if !compact { label.widthAnchor.constraint(equalToConstant: 235).isActive = true }
         let state = NSTextField(labelWithString: "Not connected")
         state.textColor = .secondaryLabelColor
         state.font = .systemFont(ofSize: 11)
+        state.toolTip = state.stringValue
         let editor: NSControl
         var action: NSControl?
         var extras: [NSView] = []
@@ -236,9 +263,14 @@ final class ExtraSettings: NSObject {
         trigger.tag = rows.count; trigger.target = self; trigger.action = #selector(change(_:))
         editor.isEnabled = false; trigger.isEnabled = false
         editor.setAccessibilityLabel(setting.title)
-        let controls = NSStackView(views: [label, editor] + extras)
-        controls.orientation = .horizontal; controls.spacing = 12
-        let row = NSStackView(views: [controls, state])
+        let controls = NSStackView(views: compact ? [editor] + extras + [state] : [label, editor] + extras)
+        controls.orientation = .horizontal; controls.spacing = compact ? 8 : 12
+        if compact {
+            state.lineBreakMode = .byTruncatingTail
+            state.widthAnchor.constraint(lessThanOrEqualToConstant: 115).isActive = true
+            state.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        }
+        let row = NSStackView(views: compact ? [label, controls] : [controls, state])
         row.orientation = .vertical; row.alignment = .leading; row.spacing = 3
         rows.append(Row(setting: setting, editor: editor, action: trigger, state: state))
         return row
@@ -246,7 +278,7 @@ final class ExtraSettings: NSObject {
 
     func reset() {
         cache.removeAll(); unavailable.removeAll()
-        for row in rows { row.state.stringValue = "Not connected" }
+        for row in rows { show("Not connected", in: row) }
         battery = "Battery: unknown"; activity = "Activity: unknown"; renderDeviceStatus()
         setIdle(false)
     }
@@ -271,7 +303,7 @@ final class ExtraSettings: NSObject {
         if case .name = setting.kind {
             let text = (row.editor as! NSTextField).stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
             let bytes = Array(text.utf8)
-            guard !bytes.isEmpty, bytes.count <= 255 else { row.state.stringValue = "Enter a name of 1–255 UTF-8 bytes."; return }
+            guard !bytes.isEmpty, bytes.count <= 255 else { show("Enter a name of 1–255 UTF-8 bytes.", in: row); return }
             payload = [UInt8(bytes.count)] + bytes
         } else {
             let value: Int
@@ -281,7 +313,7 @@ final class ExtraSettings: NSObject {
             payload = setting.payload(value: value, previous: previous)
         }
         guard let payload else { return }
-        row.state.stringValue = "Applying…"
+        show("Applying…", in: row)
         setIdle(false)
         send?(setting.namespace, setting.write, payload)
     }
@@ -291,7 +323,7 @@ final class ExtraSettings: NSObject {
               let previous = cache[setting.key], !unavailable.contains(setting.key) else { return }
         let on = mask.map { previous[0] & $0 != 0 } ?? (previous[0] == 1)
         guard let payload = setting.payload(value: on ? 0 : 1, previous: previous) else { return }
-        for row in rows where row.setting.key == setting.key { row.state.stringValue = "Applying…" }
+        for row in rows where row.setting.key == setting.key { show("Applying…", in: row) }
         setIdle(false)
         send?(setting.namespace, setting.write, payload)
     }
@@ -304,7 +336,7 @@ final class ExtraSettings: NSObject {
                 let setting = row.setting
                 guard response.status == 0, setting.valid(response.payload) else {
                     cache.removeValue(forKey: setting.key); unavailable.insert(setting.key)
-                    row.state.stringValue = response.status == 0 ? "Unrecognised value; control unavailable" : "Unavailable on this device (status \(response.status))"
+                    show(response.status == 0 ? "Unrecognised value; control unavailable" : "Unavailable on this device (status \(response.status))", in: row)
                     continue
                 }
                 cache[setting.key] = response.payload; unavailable.remove(setting.key)
@@ -316,7 +348,7 @@ final class ExtraSettings: NSObject {
             if response.status != 0 { failed(namespace: response.namespace, command: response.command, message: "Change rejected (status \(response.status))") }
             else {
                 cache.removeValue(forKey: setting.key)
-                for row in rows where row.setting.key == setting.key { row.state.stringValue = "Verifying…" }
+                for row in rows where row.setting.key == setting.key { show("Verifying…", in: row) }
             }
             // Read after rejection as well, to restore the current device value.
             send?(setting.namespace, setting.read, [])
@@ -330,7 +362,7 @@ final class ExtraSettings: NSObject {
             if let bytes = cache[row.setting.key] { render(row, bytes) }
             cache.removeValue(forKey: row.setting.key)
             unavailable.insert(row.setting.key)
-            row.state.stringValue = message + " · Refresh to retry"
+            show(message + " · Refresh to retry", in: row)
         }
     }
 
@@ -339,23 +371,28 @@ final class ExtraSettings: NSObject {
         case .toggle(let mask):
             let on = mask.map { bytes[0] & $0 != 0 } ?? (bytes[0] == 1)
             (row.editor as! NSSwitch).state = on ? .on : .off
-            row.state.stringValue = on ? "On" : "Off"
+            show(on ? "On" : "Off", in: row)
         case .choice(let choices, let timer):
             (row.editor as! NSPopUpButton).selectItem(at: Int(bytes[0]))
-            row.state.stringValue = choices[Int(bytes[0])] + (timer && bytes[0] != 0 ? " · \(bytes[1]) minutes remaining" : "")
+            show(choices[Int(bytes[0])] + (timer && bytes[0] != 0 ? " · \(bytes[1]) minutes remaining" : ""), in: row)
         case .slider(_, let signed):
             let value = signed ? Int(Int8(bitPattern: bytes[0])) : Int(bytes[0])
             row.editor.integerValue = value
-            row.state.stringValue = signed ? (value == 0 ? "Centred" : "\(abs(value)) toward \(value < 0 ? "left" : "right")") : "\(value)%"
+            show(signed ? (value == 0 ? "Centred" : "\(abs(value)) toward \(value < 0 ? "left" : "right")") : "\(value)%", in: row)
         case .name:
             (row.editor as! NSTextField).stringValue = String(bytes: bytes.dropFirst(), encoding: .utf8)!
-            row.state.stringValue = "Saved on the headphones"
+            show("Saved on the headphones", in: row)
         case .promptMode:
             (row.editor as! NSPopUpButton).selectItem(at: Int(bytes[0]))
-            row.state.stringValue = "Read from headphones"
+            show("Read from headphones", in: row)
         case .promptLevel:
-            row.editor.integerValue = Int(bytes[1]); row.state.stringValue = "\(bytes[1])% · adjusting selects Custom mode"
+            row.editor.integerValue = Int(bytes[1]); show("\(bytes[1])% · adjusting selects Custom mode", in: row)
         }
         log?("\(row.setting.title): \(row.state.stringValue)")
+    }
+
+    private func show(_ message: String, in row: Row) {
+        row.state.stringValue = message
+        row.state.toolTip = message
     }
 }

@@ -20,8 +20,7 @@ tested with Sonos Ace Ultra. Built with Swift, AppKit and CoreBluetooth.
 Download the macOS ZIP from [Releases](https://github.com/Bigsy/sonos-ace-control/releases),
 unzip it, and move **Ace Control.app** to Applications. The release build supports
 Apple silicon and Intel Macs running macOS 13 or later. Open the app and allow
-Bluetooth access when macOS asks. The optional call-audio test also needs
-microphone access.
+Bluetooth access when macOS asks.
 
 Release ZIPs are Developer ID-signed but have not been notarized by Apple.
 macOS may block its first launch. If you trust this project's download and
@@ -69,8 +68,6 @@ combinations are saved between launches. In the Shortcuts tab, choose the noise
 modes that its shortcut cycles through; all three are selected by default. A
 shortcut does nothing until the headphones are connected and their current
 setting has been read.
-The optional **Test call audio** action requires microphone access and opens the
-Sonos microphone for up to 90 seconds. Audio is discarded, not recorded or sent.
 
 ## Current limitations
 

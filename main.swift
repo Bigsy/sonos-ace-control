@@ -14,11 +14,8 @@ final class AceController: NSObject, NSApplicationDelegate, CBCentralManagerDele
     private let status = NSTextField(wrappingLabelWithString: "Starting Bluetooth…")
     private let sidetoneLabel = NSTextField(labelWithString: "Sidetone: waiting for headphones")
     private let sidetone = NSSwitch()
-    private let callAudio = CallAudioTest()
     private let extraSettings = ExtraSettings()
     private let shortcuts = KeyboardShortcuts()
-    private let callTest = NSButton(title: "Test call audio", target: nil, action: nil)
-    private let callHelp = NSTextField(wrappingLabelWithString: "Opens the Sonos mic for 90 seconds; nothing is recorded. Call audio can reduce playback quality.")
     private let noiseMode = NSPopUpButton()
     private let loudness = NSSwitch()
     private let eqType = NSPopUpButton()
@@ -78,7 +75,6 @@ final class AceController: NSObject, NSApplicationDelegate, CBCentralManagerDele
         batteryTimer?.invalidate()
         scanTimeout?.invalidate()
         reconnectTimer?.invalidate()
-        callAudio.stop()
         if let peripheral { manager.cancelPeripheralConnection(peripheral) }
     }
 
@@ -104,16 +100,6 @@ final class AceController: NSObject, NSApplicationDelegate, CBCentralManagerDele
         refresh.isEnabled = false
         sidetone.target = self; sidetone.action = #selector(changeSidetone)
         sidetone.isEnabled = false
-        callTest.target = self; callTest.action = #selector(toggleCallAudio)
-        callTest.isEnabled = false
-        callHelp.textColor = .secondaryLabelColor
-        callAudio.changed = { [weak self] active, message in
-            guard let self else { return }
-            self.callTest.title = active ? "Stop call audio" : "Test call audio"
-            self.callTest.isEnabled = active || self.ready
-            self.callHelp.stringValue = message
-            self.log(message)
-        }
         extraSettings.send = { [weak self] namespace, command, payload in
             self?.enqueue(command, payload: payload, namespace: namespace)
         }
@@ -196,12 +182,9 @@ final class AceController: NSObject, NSApplicationDelegate, CBCentralManagerDele
         scroll.hasVerticalScroller = true
         scroll.borderType = .bezelBorder
         scroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 120).isActive = true
-        let callRow = NSStackView(views: [callTest, callHelp])
-        callRow.orientation = .horizontal
-        callRow.spacing = 12
         let sound = NSTabViewItem(identifier: "Sound")
         sound.label = "Sound"
-        sound.view = ExtraSettings.scroll([toggleRow, callRow, noiseRow, loudnessRow, eqHeading, eqStack])
+        sound.view = ExtraSettings.scroll([toggleRow, noiseRow, loudnessRow, eqHeading, eqStack])
         tabs.addTabViewItem(sound)
         extraSettings.addTabs(to: tabs)
         shortcuts.addTab(to: tabs)
@@ -336,7 +319,6 @@ final class AceController: NSObject, NSApplicationDelegate, CBCentralManagerDele
             }, to: menu)
         }
         menu.addItem(.separator())
-        menu.addItem(ActionMenuItem(callAudio.isActive ? "Stop call audio test" : "Test call audio…", enabled: ready || callAudio.isActive) { [weak self] in self?.toggleCallAudio() })
         menu.addItem(ActionMenuItem("Refresh settings", enabled: menuCanWrite) { [weak self] in
             guard self?.menuCanWrite == true else { return }
             self?.refreshSettings()
@@ -542,7 +524,6 @@ final class AceController: NSObject, NSApplicationDelegate, CBCentralManagerDele
     }
 
     private func disconnected(_ error: Error?) {
-        callAudio.stop()
         extraSettings.reset()
         batteryCharacteristic = nil; batteryLevel = nil
         updateStatusItem()
@@ -862,7 +843,6 @@ final class AceController: NSObject, NSApplicationDelegate, CBCentralManagerDele
     }
 
     private func updateControlAvailability() {
-        callTest.isEnabled = ready || callAudio.isActive
         let idle = ready && pending == nil && queued.isEmpty
         extraSettings.setIdle(idle)
         refresh.isEnabled = idle
@@ -890,13 +870,6 @@ final class AceController: NSObject, NSApplicationDelegate, CBCentralManagerDele
             eqSliders[band].integerValue = values[band]
             eqValues[band].stringValue = String(values[band])
         }
-    }
-
-    @objc private func toggleCallAudio() {
-        if callAudio.isActive { callAudio.stop(); return }
-        guard ready, let name = extraSettings.headphoneName ?? peripheral?.name else { return }
-        callAudio.start(headphoneName: name)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in self?.readActivity() }
     }
 
     @objc private func changeSidetone() {

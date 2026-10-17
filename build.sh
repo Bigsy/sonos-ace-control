@@ -15,8 +15,8 @@ for ace_arch in $ace_archs; do
     mkdir -p "$ace_build_root/module-cache/$ace_arch"
     swiftc -swift-version 5 -target "$ace_arch-apple-macos$ace_deployment_target" \
         -module-cache-path "$ace_build_root/module-cache/$ace_arch" \
-        -framework AppKit -framework Carbon -framework CoreBluetooth -framework Security -framework AVFoundation \
-        "$PWD/SonosProtocol.swift" "$PWD/SonosAttestation.swift" "$PWD/CallAudioTest.swift" \
+        -framework AppKit -framework Carbon -framework CoreBluetooth -framework Security \
+        "$PWD/SonosProtocol.swift" "$PWD/SonosAttestation.swift" \
         "$PWD/MenuControls.swift" "$PWD/KeyboardShortcuts.swift" "$PWD/ExtraSettings.swift" \
         "$PWD/main.swift" -o "$ace_build_root/AceControl-$ace_arch"
 done
@@ -51,11 +51,10 @@ cat > "$ace_app/Contents/Info.plist" <<PLIST
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>NSBluetoothAlwaysUsageDescription</key><string>Read and change your Sonos Ace headphone settings over Bluetooth.</string>
 <key>NSBluetoothPeripheralUsageDescription</key><string>Read and change your Sonos Ace headphone settings over Bluetooth.</string>
-<key>NSMicrophoneUsageDescription</key><string>Open the Sonos headphone microphone to test sidetone in call audio mode. Audio is discarded, never recorded or sent.</string>
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 PLIST
-# A stable signing identity lets macOS retain Bluetooth/microphone permissions
+# A stable signing identity lets macOS retain Bluetooth permissions
 # across rebuilds. Ad-hoc signing binds permissions to a single binary hash.
 # ACE_SIGNING_IDENTITY can select a particular certificate on another Mac.
 ace_signing_identity=${ACE_SIGNING_IDENTITY:-}
