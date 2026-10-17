@@ -5,11 +5,18 @@ with Sonos Ace Ultra. Requires macOS 13 or later.
 
 ## Screenshots
 
-| | |
-| :---: | :---: |
-| **Sound**<br><img width="300" alt="Sound settings" src="https://github.com/user-attachments/assets/ee3c6a3e-576d-40ab-af83-055f6e7eb8bd" /> | **Audio options**<br><img width="300" alt="Audio options settings" src="screenshots/audio-options.png" /> |
-| **Controls**<br><img width="300" alt="Controls settings" src="screenshots/controls.png" /> | **Power**<br><img width="300" alt="Power settings" src="screenshots/power.png" /> |
-| **Voice**<br><img width="300" alt="Voice settings" src="screenshots/voice.png" /> | **Shortcuts**<br><img width="300" alt="Shortcuts settings" src="screenshots/shortcuts.png" /> |
+<table>
+  <tr>
+    <td align="center"><strong>Sound</strong><br><img width="220" alt="Sound settings" src="https://github.com/user-attachments/assets/ee3c6a3e-576d-40ab-af83-055f6e7eb8bd" /></td>
+    <td align="center"><strong>Audio options</strong><br><img width="220" alt="Audio options settings" src="screenshots/audio-options.png" /></td>
+    <td align="center"><strong>Controls</strong><br><img width="220" alt="Controls settings" src="screenshots/controls.png" /></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Power</strong><br><img width="220" alt="Power settings" src="screenshots/power.png" /></td>
+    <td align="center"><strong>Voice</strong><br><img width="220" alt="Voice settings" src="screenshots/voice.png" /></td>
+    <td align="center"><strong>Shortcuts</strong><br><img width="220" alt="Shortcuts settings" src="screenshots/shortcuts.png" /></td>
+  </tr>
+</table>
 
 ## Features
 
