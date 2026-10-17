@@ -30,6 +30,12 @@ final class AceController: NSObject, NSApplicationDelegate, CBCentralManagerDele
     private let connect = NSButton(title: "Connect", target: nil, action: nil)
     private let refresh = NSButton(title: "Refresh settings", target: nil, action: nil)
     private let scan = NSButton(title: "Scan again", target: nil, action: nil)
+    private let autoConnect = NSButton(checkboxWithTitle: "Auto-connect to last headphones", target: nil, action: nil)
+    private var autoConnectEnabled = UserDefaults.standard.bool(forKey: "autoConnectLastHeadphones")
+    private var automaticConnection = false
+    private var connectionAttempt: UUID?
+    private var scanTimeout: Timer?
+    private var reconnectTimer: Timer?
     private let details = NSTextView()
     private var found: [CBPeripheral] = []
     private var peripheral: CBPeripheral?
@@ -70,6 +76,8 @@ final class AceController: NSObject, NSApplicationDelegate, CBCentralManagerDele
     func applicationWillTerminate(_ notification: Notification) {
         shortcuts.stop()
         batteryTimer?.invalidate()
+        scanTimeout?.invalidate()
+        reconnectTimer?.invalidate()
         callAudio.stop()
         if let peripheral { manager.cancelPeripheralConnection(peripheral) }
     }
@@ -89,6 +97,9 @@ final class AceController: NSObject, NSApplicationDelegate, CBCentralManagerDele
         connect.target = self; connect.action = #selector(connectSelected)
         connect.isEnabled = false
         scan.target = self; scan.action = #selector(scanAgain)
+        autoConnect.state = autoConnectEnabled ? .on : .off
+        autoConnect.target = self; autoConnect.action = #selector(changeAutoConnect)
+        autoConnect.setAccessibilityLabel("Auto-connect to last headphones")
         refresh.target = self; refresh.action = #selector(refreshSettings)
         refresh.isEnabled = false
         sidetone.target = self; sidetone.action = #selector(changeSidetone)
@@ -112,9 +123,10 @@ final class AceController: NSObject, NSApplicationDelegate, CBCentralManagerDele
             guard let self, self.menuCanWrite, let value = self.knownSidetone else { return }
             self.enqueue(SonosProtocol.setSidetone, payload: [value ? 0 : 1])
         }
-        shortcuts.add("noise.cycle", title: "Noise control · next mode") { [weak self] in
-            guard let self, self.menuCanWrite, let mode = self.knownNoiseMode, mode <= 2 else { return }
-            self.enqueue(SonosProtocol.setANC, payload: [(mode + 1) % 3])
+        shortcuts.add("noise.cycle", title: "Noise control") { [weak self] in
+            guard let self, self.menuCanWrite, let mode = self.knownNoiseMode,
+                  let next = self.shortcuts.nextNoiseMode(after: mode) else { return }
+            self.enqueue(SonosProtocol.setANC, payload: [next])
         }
         shortcuts.add("loudness", title: "Loudness") { [weak self] in
             guard let self, self.menuCanWrite, let value = self.knownLoudness else { return }
@@ -197,7 +209,7 @@ final class AceController: NSObject, NSApplicationDelegate, CBCentralManagerDele
         logTab.label = "Log"; logTab.view = scroll
         tabs.addTabViewItem(logTab)
         tabs.heightAnchor.constraint(greaterThanOrEqualToConstant: 460).isActive = true
-        let stack = NSStackView(views: [title, help, status, deviceRow, tabs])
+        let stack = NSStackView(views: [title, help, status, deviceRow, autoConnect, tabs])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 12
@@ -334,7 +346,11 @@ final class AceController: NSObject, NSApplicationDelegate, CBCentralManagerDele
             self?.showWindow()
         })
         menu.addItem(ActionMenuItem("Open Ace Control…") { [weak self] in self?.showWindow() })
-        menu.addItem(ActionMenuItem(peripheral == nil ? "Connect" : "Disconnect", enabled: connect.isEnabled) { [weak self] in self?.connectSelected() })
+        menu.addItem(ActionMenuItem("Auto-connect to last headphones", checked: autoConnectEnabled) { [weak self] in
+            guard let self else { return }
+            self.setAutoConnect(!self.autoConnectEnabled)
+        })
+        menu.addItem(ActionMenuItem(connect.title, enabled: connect.isEnabled) { [weak self] in self?.connectSelected() })
         menu.addItem(ActionMenuItem("Scan for headphones", enabled: scan.isEnabled) { [weak self] in self?.scanAgain() })
         menu.addItem(.separator())
         menu.addItem(ActionMenuItem("Quit Ace Control") { NSApplication.shared.terminate(nil) })
@@ -365,14 +381,48 @@ final class AceController: NSObject, NSApplicationDelegate, CBCentralManagerDele
         switch central.state {
         case .poweredOn: scanAgain()
         case .unauthorized: status.stringValue = "Allow Ace Control in System Settings → Privacy & Security → Bluetooth."; log("Bluetooth permission denied or awaiting approval.")
-        case .poweredOff: status.stringValue = "Turn on Bluetooth on your Mac."
+        case .poweredOff:
+            scanTimeout?.invalidate(); reconnectTimer?.invalidate()
+            status.stringValue = "Turn on Bluetooth on your Mac."
         case .unsupported: status.stringValue = "Bluetooth is unsupported."
         default: status.stringValue = "Bluetooth state: \(central.state.rawValue)"
         }
     }
 
+    @objc private func changeAutoConnect() { setAutoConnect(autoConnect.state == .on) }
+
+    private func setAutoConnect(_ enabled: Bool) {
+        guard autoConnectEnabled != enabled else { return }
+        autoConnectEnabled = enabled
+        autoConnect.state = enabled ? .on : .off
+        UserDefaults.standard.set(enabled, forKey: "autoConnectLastHeadphones")
+        log("Auto-connect \(enabled ? "enabled" : "disabled").")
+        if enabled {
+            if peripheral == nil { scanAgain() }
+            if UserDefaults.standard.string(forKey: "lastHeadphones") == nil {
+                status.stringValue = "Auto-connect is on. Connect once to choose your headphones."
+            }
+        } else {
+            reconnectTimer?.invalidate(); reconnectTimer = nil
+            if automaticConnection, !ready, let peripheral { manager.cancelPeripheralConnection(peripheral) }
+        }
+    }
+
+    private func scheduleReconnect(after delay: TimeInterval) {
+        guard autoConnectEnabled, manager.state == .poweredOn,
+              UserDefaults.standard.string(forKey: "lastHeadphones") != nil else { return }
+        reconnectTimer?.invalidate()
+        reconnectTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
+            guard let self, self.autoConnectEnabled, self.peripheral == nil else { return }
+            self.scanAgain()
+        }
+    }
+
     @objc private func scanAgain() {
         guard manager.state == .poweredOn, peripheral == nil else { return }
+        reconnectTimer?.invalidate(); reconnectTimer = nil
+        scanTimeout?.invalidate(); scanTimeout = nil
+        manager.stopScan()
         // Developer probe mode uses an explicitly supplied, previously verified
         // peripheral UUID; it never chooses an arbitrary nearby device.
         if let option = CommandLine.arguments.firstIndex(of: "--probe-device"),
@@ -393,12 +443,20 @@ final class AceController: NSObject, NSApplicationDelegate, CBCentralManagerDele
             add(cached)
         }
         for device in manager.retrieveConnectedPeripherals(withServices: [CBUUID(string: SonosProtocol.service)]) { add(device) }
+        if autoConnectEnabled, let saved = UserDefaults.standard.string(forKey: "lastHeadphones"),
+           let id = UUID(uuidString: saved), let index = found.firstIndex(where: { $0.identifier == id }) {
+            devices.selectItem(at: index)
+            startConnection(found[index], automatically: true)
+            return
+        }
         manager.scanForPeripherals(withServices: [CBUUID(string: SonosProtocol.service)], options: nil)
         log("Scanning for service FE07.")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 20) { [weak self] in
+        scanTimeout = Timer.scheduledTimer(withTimeInterval: 20, repeats: false) { [weak self] _ in
             guard let self else { return }
+            guard self.peripheral == nil else { return }
             self.manager.stopScan()
             if self.found.isEmpty { self.status.stringValue = "No Sonos headphones found. Keep them on and nearby; close the phone app if necessary, then scan again." }
+            self.scheduleReconnect(after: 30)
         }
     }
 
@@ -415,32 +473,54 @@ final class AceController: NSObject, NSApplicationDelegate, CBCentralManagerDele
         log("Found \(device.name ?? "unnamed Sonos device") [\(device.identifier)].")
     }
 
-    func centralManager(_ central: CBCentralManager, didDiscover device: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) { add(device) }
+    func centralManager(_ central: CBCentralManager, didDiscover device: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
+        add(device)
+        guard autoConnectEnabled, peripheral == nil,
+              let saved = UserDefaults.standard.string(forKey: "lastHeadphones"),
+              device.identifier.uuidString == saved,
+              let index = found.firstIndex(where: { $0.identifier == device.identifier }) else { return }
+        devices.selectItem(at: index)
+        startConnection(device, automatically: true)
+    }
 
     @objc private func connectSelected() {
         if let peripheral {
+            if autoConnectEnabled { setAutoConnect(false) }
             manager.cancelPeripheralConnection(peripheral)
             return
         }
         guard devices.indexOfSelectedItem >= 0, devices.indexOfSelectedItem < found.count else { return }
-        let selected = found[devices.indexOfSelectedItem]
+        startConnection(found[devices.indexOfSelectedItem], automatically: false)
+    }
+
+    private func startConnection(_ selected: CBPeripheral, automatically: Bool) {
+        guard peripheral == nil else { return }
         // Sonos headphones may advertise without a local name. Verify the
         // headphone-specific control characteristics before issuing requests.
         let name = selected.name ?? "Sonos BLE device"
         connectionIssue = nil
         attestation = nil
+        automaticConnection = automatically
+        let attempt = UUID()
+        connectionAttempt = attempt
+        reconnectTimer?.invalidate(); reconnectTimer = nil
+        scanTimeout?.invalidate(); scanTimeout = nil
         manager.stopScan()
         peripheral = selected
         selected.delegate = self
-        connect.isEnabled = false
+        connect.title = "Cancel connection"
+        connect.isEnabled = true
         scan.isEnabled = false
-        status.stringValue = "Connecting to \(name)…"
-        log("Connecting to \(name).")
+        status.stringValue = "\(automatically ? "Auto-connecting" : "Connecting") to \(name)…"
+        log("\(automatically ? "Auto-connecting" : "Connecting") to \(name).")
         manager.connect(selected, options: nil)
         DispatchQueue.main.asyncAfter(deadline: .now() + 60) { [weak self, weak selected] in
-            guard let self, let selected, self.peripheral === selected, !self.ready else { return }
-            self.log("Connection setup timed out. Try closing Sonos on the phone and reconnecting.")
-            self.status.stringValue = "Connection timed out. Close Sonos on the phone, then try again."
+            guard let self, let selected, self.connectionAttempt == attempt,
+                  self.peripheral === selected, !self.ready else { return }
+            let message = "Connection timed out. Close Sonos on the phone, then try again."
+            self.connectionIssue = message
+            self.log(message)
+            self.status.stringValue = message
             self.manager.cancelPeripheralConnection(selected)
         }
     }
@@ -452,8 +532,14 @@ final class AceController: NSObject, NSApplicationDelegate, CBCentralManagerDele
         device.discoverServices([CBUUID(string: SonosProtocol.service), CBUUID(string: "180F")])
     }
 
-    func centralManager(_ central: CBCentralManager, didFailToConnect device: CBPeripheral, error: Error?) { disconnected(error) }
-    func centralManager(_ central: CBCentralManager, didDisconnectPeripheral device: CBPeripheral, error: Error?) { disconnected(error) }
+    func centralManager(_ central: CBCentralManager, didFailToConnect device: CBPeripheral, error: Error?) {
+        guard peripheral?.identifier == device.identifier else { return }
+        disconnected(error)
+    }
+    func centralManager(_ central: CBCentralManager, didDisconnectPeripheral device: CBPeripheral, error: Error?) {
+        guard peripheral?.identifier == device.identifier else { return }
+        disconnected(error)
+    }
 
     private func disconnected(_ error: Error?) {
         callAudio.stop()
@@ -467,13 +553,16 @@ final class AceController: NSObject, NSApplicationDelegate, CBCentralManagerDele
         ready = false; knownSidetone = nil; knownNoiseMode = nil; pending = nil
         knownLoudness = nil; knownEQ = nil
         queued.removeAll(); write = nil; notify = nil; setupWrite = nil; setupNotify = nil; peripheral = nil
+        automaticConnection = false
+        connectionAttempt = nil
         sidetone.isEnabled = false; refresh.isEnabled = false
         noiseMode.isEnabled = false
         updateControlAvailability()
         connect.isEnabled = !found.isEmpty
         connect.title = "Connect"
         scan.isEnabled = true
-        status.stringValue = connectionIssue ?? "Disconnected. Choose the headphones and reconnect."
+        status.stringValue = connectionIssue ?? (autoConnectEnabled ? "Disconnected. Auto-connect will retry." : "Disconnected. Choose the headphones and reconnect.")
+        scheduleReconnect(after: 10)
     }
 
     func peripheral(_ device: CBPeripheral, didDiscoverServices error: Error?) {
@@ -870,6 +959,9 @@ if CommandLine.arguments.contains("--self-test") {
     precondition(SonosAuthentication.parse(Data([1, 3, 0, 0, 2, 0])) == nil)
     precondition(SonosAuthentication.parse(Data([1, 3, 0, 0, 2, 0, 0, 0, 0, 2, 0, 0])) == nil)
     precondition(SonosAuthentication.parse(Data([0, 1, 6, 255, 255, 0]), protocolID: 0) == nil)
+    precondition(KeyboardShortcuts.nextNoiseMode(after: 1, among: [1, 2]) == 2)
+    precondition(KeyboardShortcuts.nextNoiseMode(after: 2, among: [1, 2]) == 1)
+    precondition(KeyboardShortcuts.nextNoiseMode(after: 0, among: [1, 2]) == 1)
     // Reject a truncated certificate sequence and a completion without any
     // challenge. Neither may advance the authentication state machine.
     do {

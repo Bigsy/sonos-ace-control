@@ -28,6 +28,7 @@ final class KeyboardShortcuts: NSObject {
     private var selected = Set<String>()
     private var bindings: [String: ShortcutBinding] = [:]
     private var global = true
+    private var noiseModes: [UInt8] = [0, 1, 2]
     private var checkboxes: [String: NSButton] = [:]
     private var registered: [String: EventHotKeyRef] = [:]
     private var handler: EventHandlerRef?
@@ -45,6 +46,8 @@ final class KeyboardShortcuts: NSObject {
             selected = Set(saved.selected)
             bindings = saved.bindings
             global = saved.global
+            let modes = Array(Set((saved.noiseModes ?? [0, 1, 2]).filter { $0 <= 2 })).sorted()
+            noiseModes = modes.isEmpty ? [0, 1, 2] : modes
         }
         rows.orientation = .vertical
         rows.alignment = .leading
@@ -59,11 +62,22 @@ final class KeyboardShortcuts: NSObject {
         var selected: [String]
         var bindings: [String: ShortcutBinding]
         var global: Bool
+        var noiseModes: [UInt8]?
     }
 
     func add(_ id: String, title: String, perform: @escaping () -> Void) {
         guard !entries.contains(where: { $0.id == id }) else { return }
         entries.append(Entry(id: id, title: title, perform: perform))
+    }
+
+    func nextNoiseMode(after current: UInt8) -> UInt8? {
+        Self.nextNoiseMode(after: current, among: noiseModes)
+    }
+
+    static func nextNoiseMode(after current: UInt8, among modes: [UInt8]) -> UInt8? {
+        guard !modes.isEmpty else { return nil }
+        guard let index = modes.firstIndex(of: current) else { return modes[0] }
+        return modes[(index + 1) % modes.count]
     }
 
     func checkbox(for id: String) -> NSButton {
@@ -111,7 +125,7 @@ final class KeyboardShortcuts: NSObject {
     }
 
     private func save() {
-        let saved = Saved(selected: selected.sorted(), bindings: bindings, global: global)
+        let saved = Saved(selected: selected.sorted(), bindings: bindings, global: global, noiseModes: noiseModes)
         if let data = try? JSONEncoder().encode(saved) { UserDefaults.standard.set(data, forKey: defaultsKey) }
     }
 
@@ -127,6 +141,21 @@ final class KeyboardShortcuts: NSObject {
     @objc private func scopeChanged() {
         global = scope.state == .on
         save(); registerKeys(); render()
+    }
+
+    @objc private func noiseModeChanged(_ sender: NSButton) {
+        guard (0...2).contains(sender.tag) else { return }
+        let mode = UInt8(sender.tag)
+        if sender.state == .on {
+            if !noiseModes.contains(mode) { noiseModes.append(mode); noiseModes.sort() }
+        } else if noiseModes.count > 1 {
+            noiseModes.removeAll { $0 == mode }
+        } else {
+            sender.state = .on
+            prompt.stringValue = "Select at least one noise control mode."
+            return
+        }
+        save()
     }
 
     @objc private func record(_ sender: NSButton) {
@@ -233,6 +262,19 @@ final class KeyboardShortcuts: NSObject {
             row.orientation = .horizontal
             row.spacing = 12
             rows.addArrangedSubview(row)
+            if entry.id == "noise.cycle" {
+                let label = NSTextField(labelWithString: "Shortcut cycles through:")
+                let modes = ["Off", "Noise cancelling", "Aware"].enumerated().map { mode, title in
+                    let checkbox = NSButton(checkboxWithTitle: title, target: self, action: #selector(noiseModeChanged(_:)))
+                    checkbox.tag = mode
+                    checkbox.state = noiseModes.contains(UInt8(mode)) ? .on : .off
+                    return checkbox
+                }
+                let choices = NSStackView(views: [label as NSView] + modes.map { $0 as NSView })
+                choices.orientation = .horizontal
+                choices.spacing = 12
+                rows.addArrangedSubview(choices)
+            }
             if let issue = issues[entry.id] {
                 let label = NSTextField(labelWithString: issue)
                 label.textColor = .systemOrange

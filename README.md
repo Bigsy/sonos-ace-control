@@ -7,7 +7,9 @@ tested with Sonos Ace Ultra. Built with Swift, AppKit and CoreBluetooth.
 
 - Menu bar headphone icon with battery level; `F` means fully charged.
 - Tick Shortcut beside a switch or Noise control to add it to the Shortcuts tab;
-  record a key combination for each selected control.
+  record a key combination for each selected control. Choose which noise modes
+  its shortcut cycles through, such as Noise cancelling and Aware only.
+- Optional auto-connect to the last successfully connected headphones.
 - Noise control, sidetone, loudness, and basic/advanced equalizer controls.
 - Additional audio, wear detection, button, power, voice and device settings.
 - Settings changes verified by reading their values back from the headphones.
@@ -21,7 +23,7 @@ Apple silicon and Intel Macs running macOS 13 or later. Open the app and allow
 Bluetooth access when macOS asks. The optional call-audio test also needs
 microphone access.
 
-The v0.1.0 ZIP is Developer ID-signed but has not been notarized by Apple.
+Release ZIPs are Developer ID-signed but have not been notarized by Apple.
 macOS may block its first launch. If you trust this project's download and
 choose to open it, try opening the app, then use **System Settings → Privacy &
 Security → Open Anyway** as described in [Apple's instructions](https://support.apple.com/en-gb/102445).
@@ -51,18 +53,22 @@ Maintainers with a Developer ID Application certificate can run
 `.build/release/`. Set `ACE_NOTARY_PROFILE` to a saved `notarytool` Keychain
 profile to notarize and staple the app before packaging.
 
-Allow Bluetooth access, select the headphones, and connect. Close the Sonos phone
-app if it is holding the control connection. No Android phone, ADB connection or
-captured authentication token is needed to use the controller.
+Allow Bluetooth access, select the headphones, and connect. Tick **Auto-connect
+to last headphones** in the window or menu bar to reconnect to that device on
+future launches and after an unexpected disconnection. Connect manually once
+before using auto-connect; a manual **Disconnect** turns it off. Close the
+Sonos phone app if it is holding the control connection. No Android phone, ADB
+connection or captured authentication token is needed to use the controller.
 
 Click the menu bar icon to access settings. Battery is refreshed every minute.
 Choose **Quit Ace Control** to end the app; closing its window leaves it running.
 Recorded shortcuts work anywhere on the Mac while Ace Control is running. They
 require Command, Option or Control, or a function key, to avoid intercepting ordinary typing. The
 Shortcuts tab can limit them to Ace Control instead; selections and key
-combinations are saved between launches. Noise control's shortcut cycles Off,
-Noise cancelling and Aware. A shortcut does nothing until the headphones are
-connected and their current setting has been read.
+combinations are saved between launches. In the Shortcuts tab, choose the noise
+modes that its shortcut cycles through; all three are selected by default. A
+shortcut does nothing until the headphones are connected and their current
+setting has been read.
 The optional **Test call audio** action requires microphone access and opens the
 Sonos microphone for up to 90 seconds. Audio is discarded, not recorded or sent.
 

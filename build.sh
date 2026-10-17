@@ -45,8 +45,8 @@ cat > "$ace_app/Contents/Info.plist" <<PLIST
 <key>CFBundleIdentifier</key><string>local.hedworth.ace-control</string>
 <key>CFBundleName</key><string>Ace Control</string>
 <key>CFBundleIconFile</key><string>AceControl.icns</string>
-<key>CFBundleVersion</key><string>1</string>
-<key>CFBundleShortVersionString</key><string>0.1.0</string>
+<key>CFBundleVersion</key><string>2</string>
+<key>CFBundleShortVersionString</key><string>0.1.1</string>
 <key>LSMinimumSystemVersion</key><string>$ace_deployment_target</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>NSBluetoothAlwaysUsageDescription</key><string>Read and change your Sonos Ace headphone settings over Bluetooth.</string>
