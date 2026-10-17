@@ -86,13 +86,6 @@ chain. Authentication tokens are kept in memory and are not logged or persisted.
 The `tools/` directory contains inspection utilities. App logs are stored at
 `~/Library/Logs/Ace Control.log`.
 
-## Local investigation files
-
-`private/` contains local captures, logs and Android inspection material and is
-excluded from Git. Build products in `.build/` are also excluded. The repository
-contains the independent implementation, not the APK or
-decompiled application sources.
-
 ## Licence
 
 MIT. See [LICENSE](LICENSE).
